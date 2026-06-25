@@ -1,0 +1,142 @@
+// Prisma schema — Portfolio Pandu
+// Layer 3: Database + Storage
+// Provider: Neon Postgres (free tier)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================
+// Auth.js models (per @auth/prisma-adapter spec)
+// ============================================
+
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  role          Role      @default(VIEWER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  posts    Post[]    @relation("PostAuthor")
+
+  @@index([email])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================
+// Domain models
+// ============================================
+
+model Project {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  description String   @db.Text
+  content     String?  @db.Text // markdown body
+  tech        String[] // ["Next.js", "TypeScript", ...]
+  coverUrl    String?
+  demoUrl     String?
+  repoUrl     String?
+  featured    Boolean  @default(false)
+  published   Boolean  @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([slug])
+  @@index([published, publishedAt])
+  @@map("projects")
+}
+
+model Post {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  excerpt     String    @db.Text
+  content     String    @db.Text // markdown
+  coverUrl    String?
+  published   Boolean   @default(false)
+  publishedAt DateTime?
+  authorId    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  author User? @relation("PostAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([slug])
+  @@index([published, publishedAt])
+  @@map("posts")
+}
+
+model Lead {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String   @db.Text
+  source    String?  @default("contact-form") // contact-form, project-inquiry, etc
+  ip        String?
+  userAgent String?  @db.Text
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([read])
+  @@map("leads")
+}
